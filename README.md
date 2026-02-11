@@ -25,10 +25,10 @@ vmuser ALL=(root) NOPASSWD: /usr/bin/tar
 
 # Example run with self-signed cert on master
 ```
-./vm_recover.py --master netbackup.lab.example.com \
+./vm_recover.py --master netbackup.lab.example.net \
 --username foo \
 --password bar \
---vm_name nbu-srv-001.lab.example.com \
+--vm_name nbu-srv-001.lab.example.net \
 --vm_username vmuser \
 --vm_password vmpass \
 --file /path/to/some/file.txt \
