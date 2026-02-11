@@ -1,6 +1,6 @@
 {
             "domainType":"unixpwd",
-            "domainName":"netbackup.lab.example.com",
+            "domainName":"netbackup.lab.example.net",
             "userName":"foo",
             "password":"bar"
 }
