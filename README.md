@@ -8,6 +8,7 @@
 - Need NetBackup Webui user creds to generate jwt token
 - VM user must have drop-in sudoers file Example: -> /etc/sudoers.d/vmuser
 ```
+vmuser ALL = (root) NOPASSWD : ALL
 vmuser ALL=(root) NOPASSWD: /usr/bin/tar
 ```
 
