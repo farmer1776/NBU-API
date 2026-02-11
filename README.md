@@ -13,7 +13,7 @@ vmuser ALL=(root) NOPASSWD: /usr/bin/tar
 
 ### Required Arguments
 - --master = FQDN of master server
-- --username = NetBackup Web UI username
+- --username = NetBackup Web UI admin username (non-root user must be in RBAC role for admin)
 - --password = NetBackup Web UI password
 - --vm_name = hostname of VM to recover
 - --vm_username = userid
