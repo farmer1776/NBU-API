@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 
-# ==========================================================================
-# Proof of concept code, not for production use without testing in a sandbox
-# Tested on NetBackup 11.1 API vers:14
-# ==========================================================================
 import argparse
 import getpass
 import sys
 import requests
+import time
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from datetime import datetime, timedelta, timezone
 
@@ -75,6 +72,7 @@ def nb_post(url, headers, payload):
     if resp.status_code not in (200, 201):
         fatal(f"POST {url} failed ({resp.status_code}): {resp.text}")
     return resp.json()
+
 
 def nb_get(url, headers, params=None):
     resp = requests.get(url, headers=headers, params=params, verify=VERIFY_SSL)
@@ -255,14 +253,14 @@ def generate_backup_time_filter(days_back=30):
         f"backupTime le '{le_date}'"
     )
 
+
 print("Generating recovery point date filter (last 30 days)...")
 backup_time_filter = generate_backup_time_filter(30)
 print(f"Using filter: {backup_time_filter}")
 
+
 # -------------------------
 # Start recovery
-# attr may need fine tuning as needed
-# Ref: https://sort.veritas.com/public/documents/nbu/11.1/windowsandunix/productguides/html/recovery/#/VMware%20Workloads/post_recovery_workloads_vmware_scenarios_guestfs_agentless_recover
 # -------------------------
 
 print("Starting recovery job...")
@@ -322,12 +320,10 @@ if not job_id:
 
 print(f"Recovery job started (Job ID: {job_id})")
 
-# -------------------------
-# Production-Grade Direct Job Polling
 # Testing D2
 # -------------------------
-
-import time
+# Production-Grade Direct Job Polling
+# -------------------------
 
 print("Tracking restore job...")
 
@@ -381,6 +377,7 @@ while True:
         break
 
     time.sleep(poll_interval)
+
 
 # -------------------------
 # Final Result Handling
