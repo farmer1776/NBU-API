@@ -1,0 +1,41 @@
+# NetBackup 11.1 Vmware workload "agentless" file recovery
+## API POC
+## Prerequisites
+
+- VxUpdate EEB package in the master EEB repo for the version of NBU master
+- /recovery directory in VM writable by VM user defined (needed for the VxUpdate package extraction needed for recovery)
+- Need NetBackup Webui user creds to generate jwt token
+- VM user must have drop-in sudoers file Example: -> /etc/sudoers.d/vmuser
+```
+vmuser ALL=(root) NOPASSWD: /usr/bin/tar
+```
+
+### Required Arguments
+- --master = FQDN of master server
+- --username = NetBackup Web UI username
+- --password = NetBackup Web UI password
+- --vm_name = hostname of VM to recover
+- --vm_username = userid
+- --vm_password = password
+- --file = File to be recovered
+- --destination = Path to recover file to
+- --no_check_certificate = For self signed TLS
+
+
+# Example run with self-signed cert on master
+```
+./vm_recover.py --master netbackup.lab.example.com \
+--username foo \
+--password bar \
+--vm_name nbu-srv-001.lab.example.com \
+--vm_username vmuser \
+--vm_password vmpass \
+--file /path/to/some/file.txt \
+--destination /path/to/restore \
+--no_check_certificate
+```
+
+### References:
+- https://github.com/VeritasOS/netbackup-api-code-samples
+- https://sort.veritas.com/public/documents/nbu/11.1/windowsandunix/productguides/html/getting-started/
+- https://sort.veritas.com/public/documents/nbu/11.1/windowsandunix/productguides/html/recovery/#/VMware%20Workloads/post_recovery_workloads_vmware_scenarios_guestfs_agentless_recover
