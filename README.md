@@ -2,6 +2,7 @@
 ## API POC
 ## Prerequisites
 
+- NetBackup 11.1 master server
 - VxUpdate EEB package in the master EEB repo for the version of NBU master
 - /recovery directory in VM writable by VM user defined (needed for the VxUpdate package extraction needed for recovery)
 - Need NetBackup Webui user creds to generate jwt token
