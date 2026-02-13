@@ -12,29 +12,21 @@ vmuser ALL = (root) NOPASSWD : ALL
 vmuser ALL=(root) NOPASSWD: /usr/bin/tar
 ```
 
-### Required Arguments
-- --master = FQDN of master server
-- --username = NetBackup Web UI admin username (non-root user must be in RBAC role for admin)
-- --password = NetBackup Web UI password
-- --vm_name = hostname of VM to recover
-- --vm_username = userid
-- --vm_password = password
-- --file = File to be recovered
-- --destination = Path to recover file to
-- --no_check_certificate = For self signed TLS
+### Required Arguments for config.json
+- master = FQDN of master server
+- username = NetBackup Web UI admin username (non-root user must be in RBAC role for admin)
+- password = NetBackup Web UI password
+- vm_name = hostname of VM to recover
+- vm_username = userid
+- vm_password = password
+- files = File(s) to be recovered
+- destination = Path to recover file(s) to
+- no_check_certificate = For self signed TLS
 
 
 # Example run with self-signed cert on master
 ```
-./vm_recover.py --master netbackup.lab.example.net \
---username foo \
---password bar \
---vm_name nbu-srv-001.lab.example.net \
---vm_username vmuser \
---vm_password vmpass \
---file /path/to/some/file.txt \
---destination /path/to/restore \
---no_check_certificate
+./vm_recover.py --config config.json
 ```
 
 ### References:
