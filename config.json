@@ -1,0 +1,23 @@
+{
+  "master": "nbu-srv-001.example.com",
+  "username": "foo",
+  "password": "bar",
+
+  "vm_name": "vm1.example.com",
+  "vm_username": "foo",
+  "vm_password": "bar",
+
+  "files": [
+    "/var/log/dnf.log",
+    "/var/log/messages",
+    "/etc/redhat-release",
+    "/etc/postfix/main.cf",
+    "/home/vmuser/test.file"
+  ],
+ 
+  "destination": "/path/to/restore",
+
+  "no_check_certificate": true,
+
+  "backup_days_back": 30
+}
