@@ -9,54 +9,95 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from datetime import datetime, timedelta, timezone
 
 # -------------------------
-# Argument parsing
+# Argument parsing (JSON driven)
 # -------------------------
+
+import json
 
 parser = argparse.ArgumentParser(
     description="NetBackup 11.1 agentless VM file restore (guestfs)"
 )
 
-parser.add_argument("--master", required=True, help="NetBackup master server")
-parser.add_argument("--username", required=True, help="NetBackup username")
-parser.add_argument("--password", help="NetBackup password")
-
-parser.add_argument("--vm_name", required=True, help="VM display name")
-parser.add_argument("--vm_username", required=True, help="VM guest username")
-parser.add_argument("--vm_password", help="VM guest password")
-
-parser.add_argument("--file", required=True, help="Source file to restore")
-parser.add_argument("--destination", required=True, help="Destination path")
-
 parser.add_argument(
-    "--no_check_certificate",
-    action="store_true",
-    help="Disable SSL certificate verification",
+    "--config",
+    required=True,
+    help="Path to JSON configuration file"
 )
 
 args = parser.parse_args()
 
-if not args.password:
-    args.password = getpass.getpass("NetBackup password: ")
+# Load JSON config
+try:
+    with open(args.config, "r") as f:
+        config = json.load(f)
+except Exception as e:
+    print(f"ERROR: Failed to read config file: {e}")
+    sys.exit(1)
 
-if not args.vm_password:
-    args.vm_password = getpass.getpass("VM password: ")
+# Map config values
+master = config.get("master")
+username = config.get("username")
+password = config.get("password")
 
-if args.no_check_certificate:
+vm_name = config.get("vm_name")
+vm_username = config.get("vm_username")
+vm_password = config.get("vm_password")
+
+source_files = config.get("files")
+destination = config.get("destination")
+
+if not source_files or not isinstance(source_files, list):
+    fatal("Config must include 'files' as a list of file paths")
+
+if len(source_files) == 0:
+    fatal("At least one file must be specified in 'files'")
+
+if len(source_files) > 8:
+    fatal("Maximum of 8 files allowed in 'files'")
+
+no_check_certificate = config.get("no_check_certificate", False)
+backup_days_back = config.get("backup_days_back", 30)
+
+# Validate required fields
+required_fields = {
+    "master": master,
+    "username": username,
+    "vm_name": vm_name,
+    "vm_username": vm_username,
+    "files": source_files,
+    "destination": destination,
+}
+
+missing = [k for k, v in required_fields.items() if not v]
+if missing:
+    print(f"ERROR: Missing required configuration values: {missing}")
+    sys.exit(1)
+
+# Secure password prompts if omitted
+if not password:
+    password = getpass.getpass("NetBackup password: ")
+
+if not vm_password:
+    vm_password = getpass.getpass("VM password: ")
+
+if no_check_certificate:
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # -------------------------
 # Constants
 # -------------------------
 
-API_VERSION = "14.0"
-BASE_URL = f"https://{args.master}/netbackup"
+
+API_VERSION = "12.0"
+# API_VERSION = "14.0" # for NBU 11.1
+BASE_URL = f"https://{master}/netbackup"
 
 HEADERS_BASE = {
     "Content-Type": f"application/vnd.netbackup+json;version={API_VERSION}",
     "Accept": f"application/vnd.netbackup+json;version={API_VERSION}",
 }
 
-VERIFY_SSL = not args.no_check_certificate
+VERIFY_SSL = not no_check_certificate
 
 # -------------------------
 # Helper functions
@@ -87,9 +128,10 @@ def nb_get(url, headers, params=None):
 print("Authenticating with NetBackup...")
 
 login_payload = {
-    "userName": args.username,
-    "password": args.password,
+    "userName": username,
+    "password": password,
 }
+
 
 login_resp = nb_post(
     f"{BASE_URL}/login",
@@ -108,11 +150,12 @@ HEADERS_AUTH = {
 
 print("JWT acquired")
 
+
 # -------------------------
 # Discover VM asset (VMware assets payload / UUID-based)
 # -------------------------
 
-print(f"Discovering VM asset '{args.vm_name}'...")
+print(f"Discovering VM asset '{vm_name}'...")
 
 assets_resp = nb_get(
     f"{BASE_URL}/asset-service/workloads/vmware/assets",
@@ -131,15 +174,15 @@ for asset in assets_resp.get("data", []):
     common = attrs.get("commonAssetAttributes", {})
     display_name = common.get("displayName")
 
-    if display_name == args.vm_name:
+    if display_name == vm_name:
         matching_assets.append(asset)
 
 if not matching_assets:
-    fatal(f"No VM found with exact displayName '{args.vm_name}'")
+    fatal(f"No VM found with exact displayName '{vm_name}'")
 
 if len(matching_assets) > 1:
     fatal(
-        f"Multiple VMs found with name '{args.vm_name}'. "
+        f"Multiple VMs found with name '{vm_name}'. "
         f"Please disambiguate using UUID."
     )
 
@@ -200,13 +243,13 @@ precheck_payload = {
         "type": "vmAgentlessFilePreRecoveryCheckRequest",
         "attributes": {
             "recoveryOptions": {
-                "recoveryHost": args.master,
+                "recoveryHost": master,
                 "vCenter": vcenter,
                 "esxiServer": esxi_server,
                 "instanceUuid": instance_uuid,
                 "datastore": datastore,
-                "vmUsername": args.vm_username,
-                "vmPassword": args.vm_password,
+                "vmUsername": vm_username,
+                "vmPassword": vm_password,
                 "stagingLocation": "/recovery",
                 "sizeKB": 64,
                 "restrictedRestoreMode": False,
@@ -255,15 +298,26 @@ def generate_backup_time_filter(days_back=30):
 
 
 print("Generating recovery point date filter (last 30 days)...")
-backup_time_filter = generate_backup_time_filter(30)
+backup_time_filter = generate_backup_time_filter(backup_days_back)
 print(f"Using filter: {backup_time_filter}")
 
 
 # -------------------------
-# Start recovery
+# Start recovery - do the thing
 # -------------------------
 
+
 print("Starting recovery job...")
+
+recovery_start_time = time.time()
+
+vm_files_payload = []
+
+for file_path in source_files:
+    vm_files_payload.append({
+        "source": file_path,
+        "destination": destination,
+    })
 
 recovery_payload = {
     "data": {
@@ -274,24 +328,19 @@ recovery_payload = {
                 "filter": backup_time_filter,
             },
             "recoveryObject": {
-                "vmFiles": [
-                    {
-                        "source": args.file,
-                        "destination": args.destination,
-                    }
-                ],
-                "alternateLocationDirectory": args.destination,
-                "flattenDirectoryStructure": False,
+                "vmFiles": vm_files_payload,
+                "alternateLocationDirectory": destination,
+                "flattenDirectoryStructure": True,
                 "appendString": "_restored",
                 "vmRecoveryDestination": {
-                    "recoveryHost": args.master,
+                    "recoveryHost": master,
                     "vCenter": vcenter,
                     "esxiServer": esxi_server,
                     "instanceUuid": instance_uuid,
                     "datastore": datastore,
                     "transportMode": "san:hotadd:nbd:nbdssl",
-                    "vmUsername": args.vm_username,
-                    "vmPassword": args.vm_password,
+                    "vmUsername": vm_username,
+                    "vmPassword": vm_password,
                     "stagingLocation": "/recovery",
                 },
             },
@@ -307,7 +356,6 @@ recovery_payload = {
     }
 }
 
-
 recovery_resp = nb_post(
     f"{BASE_URL}/recovery/workloads/vmware/scenarios/guestfs-agentless/recover",
     headers=HEADERS_AUTH,
@@ -320,9 +368,16 @@ if not job_id:
 
 print(f"Recovery job started (Job ID: {job_id})")
 
+
+job_registered_time = None
+first_transfer_time = None
+job_end_time = None
+first_byte_recorded = False
+
+
 # Testing D2
 # -------------------------
-# Production-Grade Direct Job Polling
+# Direct Job Polling
 # -------------------------
 
 print("Tracking restore job...")
@@ -331,6 +386,7 @@ restore_job_id = job_id
 timeout_seconds = 7200
 poll_interval = 20
 start_time = time.time()
+
 
 while True:
 
@@ -345,6 +401,9 @@ while True:
         print("Waiting for job to register in Activity Monitor...")
         time.sleep(poll_interval)
         continue
+    else:
+        if job_registered_time is None:
+            job_registered_time = time.time()
 
     # Real error
     if resp.status_code != 200:
@@ -366,6 +425,11 @@ while True:
     kb = attrs.get("kilobytesTransferred", 0)
     rate = attrs.get("transferRate", 0)
 
+    # Capture first byte time
+    if kb > 0 and not first_byte_recorded:
+        first_transfer_time = time.time()
+        first_byte_recorded = True
+
     print(
         f"  Job {restore_job_id} | "
         f"State={state} Status={status} "
@@ -373,15 +437,49 @@ while True:
         f"KB={kb} Rate={rate} KB/s"
     )
 
+    # Properly indented termination block
     if state in ("DONE", "FAILED", "CANCELLED"):
+        job_end_time = time.time()
         break
 
     time.sleep(poll_interval)
 
+# -------------------------
+# Final Result Handling + RTO Metrics
+# -------------------------
 
-# -------------------------
-# Final Result Handling
-# -------------------------
+if not job_end_time:
+    job_end_time = time.time()
+
+total_rto = job_end_time - recovery_start_time
+
+registration_delay = (
+    job_registered_time - recovery_start_time
+    if job_registered_time else 0
+)
+
+transfer_duration = (
+    job_end_time - first_transfer_time
+    if first_transfer_time else 0
+)
+
+total_mb = kb / 1024
+effective_rate = (
+    total_mb / transfer_duration
+    if transfer_duration > 0 else 0
+)
+
+print("\n========== RTO METRICS ==========")
+print(f"Total Recovery Time (RTO): {total_rto:.2f} seconds")
+print(f"Job Registration Delay: {registration_delay:.2f} seconds")
+
+if first_transfer_time:
+    print(f"Time to First Byte: {first_transfer_time - recovery_start_time:.2f} seconds")
+    print(f"Active Transfer Duration: {transfer_duration:.2f} seconds")
+    print(f"Total Data Restored: {total_mb:.2f} MB")
+    print(f"Effective Throughput: {effective_rate:.2f} MB/sec")
+
+print("=================================\n")
 
 if state == "DONE" and status == 0:
     print("Restore completed successfully")
