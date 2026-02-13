@@ -6,8 +6,8 @@
 - VxUpdate EEB package in the master EEB repo for the version of NBU master
 - /recovery directory in VM writable by VM user defined (needed for the VxUpdate package extraction needed for recovery)
 - Need NetBackup Admin (RBAC Admin role) user creds
-- VM user must have drop-in sudoers file Example: -> /etc/sudoers.d/vmuser
 - VM user must be member of wheel/sudo group
+- VM user must have drop-in sudoers file Example: -> /etc/sudoers.d/vmuser
 ```
 vmuser ALL = (root) NOPASSWD : ALL
 vmuser ALL=(root) NOPASSWD: /usr/bin/tar
